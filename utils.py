@@ -79,11 +79,10 @@ def train_function(model,num_epochs,train_dataloader,optimizer):
 #     return metric.compute()
 
 
-# Versión para un modelo planteado como multiTask. La evaluación sigue siendo individual, pero
-# hay que indicar la tarea
 
 
-def eval_function(model,metric,eval_dataloader,task = 0):
+# Versión para modelo multitask, evalua en una sola tarea
+def eval_function_multi_single(model,metric,eval_dataloader,task = 0):
     '''Función para evaluar un modelo dado en la tarea indicada.
     
     model: modelo a evaluar
@@ -108,6 +107,36 @@ def eval_function(model,metric,eval_dataloader,task = 0):
 
 
 
+from datasets import load_metric
+
+def eval_function_multi(model,eval_dataloader,tasks_names):
+    '''Función para evaluar un modelo en todas las tareas indicadas
+    
+    model: modelo a evaluar
+    
+    eval_dataloader: conjunto para evaluar. Debe ser un Pytorch DataLoader. 
+    task_names: tareas en las que voy a evaluar mi modelo'''
+
+    # Usa accuracy, puedo cambiar para pasarle en la entrada la metrica (o métricas) que quiera utilizar!! 
+    # (la paso suelta o paso una lista de metricas)
+    model.eval()
+    metrics = {task : load_metric("accuracy") for task  in range(len(tasks_names))} # Se podria modificar en funcion del tipo de tarea
+    for batch in eval_dataloader:
+        batch = {k:v.to(device) for k,v in batch.items()}
+        with torch.no_grad():
+            outputs = model(**batch)
+        
+        # logits = outputs.logits 
+        logits = outputs.logits
+        predictions = {task : torch.argmax(logits[task],dim=-1) for task in range(len(tasks_names))}
+
+        for task, metric in metrics.items():
+            metric.add_batch(predictions = predictions[task], references = batch["labels"][:,0][:,task])
+
+
+    return {tasks_names[task] : metric.compute() for task, metric in metrics.items()}
+
+
 # Clase MyDataSet. Crea dataset custom para poder usarlo luego para clasificación.
 
 class MyDataSet(torch.utils.data.Dataset):
@@ -124,7 +153,7 @@ class MyDataSet(torch.utils.data.Dataset):
         x = self.data[index]
         labels =  self.labels[index]
         labels = np.array([labels])
-        # labels = labels.astype('float')
+
         labels = labels
         attention = self.attention[index]
 
