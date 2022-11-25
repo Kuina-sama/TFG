@@ -60,7 +60,10 @@ def create_dependency_labels(data,conllu_file_path,encoding_type,separator):
         conllu_nodes = parse_conllu(f)
 
 
+    data_dependency = {}
     for text, node_list in zip(data,conllu_nodes):
-        data[text]['dependency_tags'] =  [str(label) for label in encoder.encode(node_list)]
+        # data[text]['dependency_tags'] =  [str(label) for label in encoder.encode(node_list)]
+        data_dependency[text] = [str(label) for label in encoder.encode(node_list)]
 
-    return data
+    # return data
+    return data_dependency
