@@ -5,13 +5,13 @@ import torch
 import time
 import sys 
 sys.path.append(r"C:\Users\kuina\OneDrive\TFG\Codigo\CoDeLin")
-from CoDeLin.utils.reader import parse_conllu
+from CoDeLin.models.conll_node import ConllNode
 from CoDeLin.encs.enc_deps import *
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 from tqdm import tqdm
-from stanza.utils.conll import CoNLL
+
 
 
 nlp = stanza.Pipeline(lang='en',processors='tokenize,mwt,pos,lemma,depparse',verbose=False, tokenize_no_ssplit=True)
@@ -41,13 +41,26 @@ def create_dependency_tags(dataset,encoding_type,separator):
     end = time.time()
     print(f'Parsing de dependencias terminado. Duración del proceso: {(end-start)/60} minutos')
     print('Comenzando a generar el encoding para las dependencias')
-    for item in tqdm(docs_out):
+    for doc in tqdm(docs_out):
 
-        CoNLL.write_doc2conll(item,'test.conllu') 
-        with open('test.conllu','r') as f:
-            node_list = parse_conllu(f)
+        dicts = doc.to_dict()
+        conllu_nodes = []
+        for item in dicts[0]:
+            id = item.get('id','_')
+            form = item.get('text','_')
+            lemma =  item.get('lemma','_')
+            upos =  item.get('upos','_')
+            xpos = item.get('xpos','_')
+            feats = item.get('feats','_')
+            head = item.get('head','_')
+            deprel = item.get('deprel','_')
+            
+            conllu_nodes.append(ConllNode(wid = id, form = form, lemma =  lemma, upos =  upos, xpos= xpos, 
+                feats = feats, head= head, deprel =  deprel, deps = '_', misc = '_'))
 
-        dataset[item.text][encoding_type] = [str(label) for label in encoder.encode(node_list[0])]
+
+
+        dataset[doc.text][encoding_type] = [str(label) for label in encoder.encode(conllu_nodes)]
 
 
     print('Proceso terminado con éxito')
