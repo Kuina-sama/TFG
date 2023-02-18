@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 
+
+from transformers import AutoTokenizer
 #######################################################################################
 
 # CONSTANTS
@@ -24,7 +26,41 @@ num_to_task = {0:'about',1:'as',2:'to'}
 
 #######################################################################################
 
-# GENERIC FUNCTIONS
+# Funciones para formatear el dataset y tokenizar los textos
+
+#######################################################################################
+
+def tokenize_dataset(dataset,tasks_names,model_name):
+    """Tokeniza y formatea el dataset indicado para las tareas indicadas en tasks_names.
+    Usa el tokenizer propio del modelo indicado.
+
+    NO considera la información de parsing de dependencias"""
+
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    token_data = {}
+    for index, text in enumerate(dataset):
+        tokenized = tokenizer(text,truncation=True)
+
+        
+        labels ={}
+        for task in tasks_names:
+            aux_label = [text_to_num[task][x] for x in dataset[text][f'label_{task}']]
+
+
+            labels[task] = aux_label
+
+        token_data[index] = {'text':text,
+                                'input_ids':tokenized.input_ids,
+                                'attention_mask':tokenized.attention_mask,
+                                'labels':labels}
+
+    
+    return token_data
+
+
+#######################################################################################
+
+# PLOT FUNCTIONS
 
 #######################################################################################
 def plot_losses_val(train_loss,val_loss):
