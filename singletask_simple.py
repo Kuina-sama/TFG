@@ -25,6 +25,7 @@ import utils_generic as generic
 
 #######################################################################################
 
+
 class DatasetSingleTaskSimple(Dataset):
     def __init__(self,data,task,eval):
         self.data = data
@@ -62,6 +63,7 @@ class DatasetSingleTaskSimple(Dataset):
                 'attention_mask': attention,
                 'tasks':self.task,
                 'label':label}
+
 
         return  sample
 
@@ -112,7 +114,8 @@ class SingleTaskSimple(nn.Module):
         self.taskLayer = nn.ModuleList([])
         self.taskLayer.append(nn.Sequential(
             nn.Dropout(self.dropout),
-            nn.Linear(self.encoder_dim,self.num_labels)
+            # nn.Linear(self.encoder_dim,self.num_labels)
+            nn.Linear(self.encoder_dim,1)
         ))
 
      
@@ -283,7 +286,7 @@ def train_function_early_stop(model,num_epochs,dl_train,optimizer,early_stop = 1
         epoch_loss = 0 
         model.train()
         for batch in dl_train: 
-            # try:
+
             batch = {k:v.to(device) for k,v in batch.items()} # Manda los datos a la gpu
 
             optimizer.zero_grad()
@@ -304,9 +307,7 @@ def train_function_early_stop(model,num_epochs,dl_train,optimizer,early_stop = 1
             
             
             progress_bar.update(1)
-            # except RuntimeError as e:
 
-            #     print(e)
                 
             
         epoch_train_loss =epoch_loss/len(dl_train)
@@ -315,7 +316,7 @@ def train_function_early_stop(model,num_epochs,dl_train,optimizer,early_stop = 1
         if dl_val:
             epoch_val_loss = validation_func(model,dl_val,loss_fct)
             val_loss.append(epoch_val_loss)
-            print(f'Epoch {epoch+1} \t Training loss: {epoch_train_loss} \t Validation loss: {epoch_val_loss} ')
+            print(f'Epoch {epoch+1} \t Training loss: {epoch_train_loss} \t Validation loss: {epoch_val_loss} \t ')
             if epoch_val_loss < best_loss:
                 best_loss = epoch_val_loss
                 epochs_with_no_improvement = 0
@@ -378,13 +379,14 @@ def eval_function_single(model,dl_eval,metric_name):
 
 from sklearn.metrics import accuracy_score
 
+
+
 # def eval_function_single_sk(model,dl_eval):
 
 #     model.eval()
-   
-#     acc = []
 
-    
+#     total_predictions = torch.tensor([]).to(device)
+#     total_labels = torch.tensor([]).to(device)
 #     for batch in dl_eval:
 #         batch = {k:v.to(device) for k,v in batch.items()}
 #         with torch.no_grad():
@@ -395,40 +397,94 @@ from sklearn.metrics import accuracy_score
 #         predictions =  torch.argmax(outputs,dim=-1) 
 #         labels = batch['label']
 
-
 #         mask = labels != 2
-
-
 #         if len(predictions[mask]) == 0: # Caso de que no tengamos esa tarea en la lista
 #             continue
-                
-#         acc.append(accuracy_score(batch['label'][mask].cpu(), predictions[mask].cpu()))
+
+#         total_predictions = torch.cat([total_predictions,predictions[mask]])
+#         total_labels = torch.cat([total_labels,labels[mask]])
+        
 
 
-#     return sum(acc)/len(acc)
+#     acc = accuracy_score(total_labels.cpu(), total_predictions.cpu())
 
-def eval_function_single_sk(model,dl_eval):
+#     return acc
+
+# def eval_function_single_sk(model,dl_eval,gender = None):
+
+#     if gender == 'female':
+#         mask_value = 0
+#     elif gender == 'male':
+#         mask_value = 1
+
+#     model.eval()
+
+#     total_predictions = torch.tensor([]).to(device)
+#     total_labels = torch.tensor([]).to(device)
+#     for batch in dl_eval:
+#         batch = {k:v.to(device) for k,v in batch.items()}
+#         with torch.no_grad():
+#             outputs = model(input_ids = batch['input_ids'],attention_mask = batch['attention_mask'])
+        
+
+
+#         predictions =  torch.argmax(outputs,dim=-1) 
+#         labels = batch['label']
+
+#         if gender:
+#             mask = labels == mask_value
+#         else:
+#             mask = labels != 2
+#         if len(predictions[mask]) == 0: # Caso de que no tengamos esa tarea en la lista
+#             continue
+
+#         total_predictions = torch.cat([total_predictions,predictions[mask]])
+#         total_labels = torch.cat([total_labels,labels[mask]])
+        
+
+
+#     acc = accuracy_score(total_labels.cpu(), total_predictions.cpu())
+
+#     return acc
+
+def eval_function_single_sk(model,dl_eval,gender = None):
+
+    if gender == 'female':
+        mask_value = 0
+    elif gender == 'male':
+        mask_value = 1
 
     model.eval()
 
     total_predictions = torch.tensor([]).to(device)
     total_labels = torch.tensor([]).to(device)
+
+
+
     for batch in dl_eval:
         batch = {k:v.to(device) for k,v in batch.items()}
+
+        if gender:
+            mask = batch['label'] == mask_value
+        else:
+            mask = batch['label'] != 2
+
+        if len(batch['label'][mask]) == 0: # Caso de que no tengamos esa tarea en la lista
+            continue
+
         with torch.no_grad():
-            outputs = model(input_ids = batch['input_ids'],attention_mask = batch['attention_mask'])
+            outputs = model(input_ids = batch['input_ids'][mask],attention_mask = batch['attention_mask'][mask])
         
 
 
         predictions =  torch.argmax(outputs,dim=-1) 
-        labels = batch['label']
+        labels = batch['label'][mask]
 
-        mask = labels != 2
-        if len(predictions[mask]) == 0: # Caso de que no tengamos esa tarea en la lista
-            continue
 
-        total_predictions = torch.cat([total_predictions,predictions[mask]])
-        total_labels = torch.cat([total_labels,labels[mask]])
+
+
+        total_predictions = torch.cat([total_predictions,predictions])
+        total_labels = torch.cat([total_labels,labels])
         
 
 

@@ -22,7 +22,7 @@ task_to_num =  {'about':0,'as':1,'to':2}
 
 num_to_task = {0:'about',1:'as',2:'to'}
 
-
+gender = {'female':0,'male':1}
 
 #######################################################################################
 
@@ -30,13 +30,15 @@ num_to_task = {0:'about',1:'as',2:'to'}
 
 #######################################################################################
 
-def tokenize_dataset(dataset,tasks_names,model_name):
+
+
+def tokenize_dataset(dataset,tasks_names,model_conf):
     """Tokeniza y formatea el dataset indicado para las tareas indicadas en tasks_names.
     Usa el tokenizer propio del modelo indicado.
 
     NO considera la información de parsing de dependencias"""
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer = model_conf['tokenizer']
     token_data = {}
     for index, text in enumerate(dataset):
         tokenized = tokenizer(text,truncation=True)
@@ -57,7 +59,74 @@ def tokenize_dataset(dataset,tasks_names,model_name):
     
     return token_data
 
+# def tokenize_dataset_with_dependencies(dataset,tasks_names,vocab,model_conf):
+#     """ Tokeniza y formatea mi dataset. SI considera la información de parsing de dependencias.
+#     Por el momento funciona para encoding relative"""
 
+#     tokenizer = model_conf['tokenizer']
+#     token_data = {}
+#     for index, text in enumerate(dataset):
+#         tokenized = tokenizer(text,truncation=True)
+
+#         labels ={}
+#         for task in tasks_names:
+#             aux_label = [text_to_num[task][x] for x in dataset[text][f'label_{task}']]
+
+
+#             labels[task] = aux_label
+
+#         # Esta parte procesa los tags de dependencia
+#         aux = [x.split('_') for x in dataset[text][vocab.encoding]]
+
+#         dep_tags = {}
+#         for x in range(vocab.total_vocabs):
+#             dep_tags[f'tag{x}'] = [vocab.word_to_indx[x].get(aux[i][x],vocab.word_to_indx[x]['unk']) for i in range(len(aux))]
+
+
+#         #Junto todo en un nuevo dataset
+#         token_data[index] = {'text':text,
+#                                 'input_ids':tokenized.input_ids,
+#                                 'attention_mask':tokenized.attention_mask,
+#                                 'labels':labels,
+#                                 'dep_tags':dep_tags}
+
+#     return token_data
+
+def tokenize_dataset_with_dependencies(dataset,tasks_names,vocab,model_conf):
+    """ Tokeniza y formatea mi dataset. SI considera la información de parsing de dependencias.
+    Por el momento funciona para encoding relative"""
+
+    tokenizer = model_conf['tokenizer']
+    token_data = {}
+    for index, text in enumerate(dataset):
+        tokenized = tokenizer(dataset[text]['tokenized'],truncation=True)
+
+        labels ={}
+        for task in tasks_names:
+            aux_label = [text_to_num[task][x] for x in dataset[text][f'label_{task}']]
+
+
+            labels[task] = aux_label
+
+        # Esta parte procesa los tags de dependencia
+        aux = [x.split('_') for x in dataset[text][vocab.encoding]]
+
+        if vocab.encoding == 'pos':
+            aux = [x.replace('--','_').split('_') for x in dataset[text][vocab.encoding]]
+        
+        dep_tags = {}
+        for x in range(vocab.total_vocabs):
+            dep_tags[f'tag{x}'] = [vocab.word_to_indx[x].get(aux[i][x],vocab.word_to_indx[x]['unk']) for i in range(len(aux))]
+
+
+        #Junto todo en un nuevo dataset
+        token_data[index] = {'text':text,
+                                'input_ids':tokenized.input_ids,
+                                'attention_mask':tokenized.attention_mask,
+                                'labels':labels,
+                                'dep_tags':dep_tags}
+
+    return token_data
 #######################################################################################
 
 # PLOT FUNCTIONS

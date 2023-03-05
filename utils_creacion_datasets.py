@@ -5,8 +5,8 @@ import torch
 import time
 import sys 
 sys.path.append(r"C:\Users\kuina\OneDrive\TFG\Codigo\CoDeLin")
-from CoDeLin.models.conll_node import ConllNode
-from CoDeLin.encs.enc_deps import *
+from CoDeLin.src.models.conll_node import ConllNode
+from CoDeLin.src.encs.enc_deps import *
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -27,7 +27,8 @@ def create_dependency_tags(dataset,encoding_type:list,separator:str):
 
     encoders = {'absolute':naive_absolute.D_NaiveAbsoluteEncoding(separator),
     'relative':naive_relative.D_NaiveRelativeEncoding(separator),
-    'pos':pos_based.D_PosBasedEncoding(separator)
+    'pos':pos_based.D_PosBasedEncoding(separator),
+    'brk':brk_based.D_BrkBasedEncoding(separator,True)
     }
 
 

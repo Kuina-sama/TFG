@@ -118,7 +118,8 @@ class MultiTaskSimple(nn.Module):
         self.taskLayer = nn.ModuleList([])
         self.taskLayer.append(nn.Sequential(
             nn.Dropout(self.dropout),
-            nn.Linear(self.encoder_dim,self.num_labels)
+            # nn.Linear(self.encoder_dim,self.num_labels)
+            nn.Linear(self.encoder_dim,1)
         ))
 
     def forward(self,input_ids = None,attention_mask = None):
