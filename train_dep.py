@@ -9,7 +9,7 @@ from tqdm.auto import tqdm
 import utils_generic as generic
 
 
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score,recall_score,confusion_matrix,precision_score,f1_score
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -23,7 +23,11 @@ def validation_func(model,dl_val):
 
         batch = {k:v.to(device) for k,v in batch.items()}
         with torch.no_grad():
-            val_output = model(input_ids = batch['input_ids'],attention_mask = batch['attention_mask'],dep_tags = batch['dep_tags'])
+            if 'attention_mask' not in batch:
+                val_output = model(input_ids = batch['input_ids'],dep_tags = batch['dep_tags'])
+
+            else:
+                val_output = model(input_ids = batch['input_ids'],attention_mask = batch['attention_mask'],dep_tags = batch['dep_tags'])
 
             loss = loss_fct(val_output , batch['label'].float().unsqueeze(1))
 
@@ -43,7 +47,11 @@ def train_one_epoch(model,dl_train,optimizer,lr_scheduler,progress_bar):
 
         optimizer.zero_grad()
         
-        output = model(input_ids = batch['input_ids'],attention_mask = batch['attention_mask'],dep_tags = batch['dep_tags']) # Calcula outputs
+        if 'attention_mask' not in batch:
+            output = model(input_ids = batch['input_ids'],dep_tags = batch['dep_tags']) # Calcula outputs
+
+        else:
+            output = model(input_ids = batch['input_ids'],attention_mask = batch['attention_mask'],dep_tags = batch['dep_tags']) # Calcula outputs
 
         
 
@@ -61,7 +69,7 @@ def train_one_epoch(model,dl_train,optimizer,lr_scheduler,progress_bar):
     return epoch_loss
 
 
-def train_function(model,num_epochs,dl_train,optimizer,early_stop = 10,dl_val = None,save_path='model'):
+def train_function(model,num_epochs,dl_train,optimizer,early_stop = 10,dl_val = None,save_path='model',es_threshold=0.001):
     '''
     model: modelo a entrenar.
     num_epoch: ciclos de entrenamiento
@@ -114,7 +122,7 @@ def train_function(model,num_epochs,dl_train,optimizer,early_stop = 10,dl_val = 
                 best_loss = epoch_val_loss
                 epochs_with_no_improvement = 0
                 torch.save(model.state_dict(),save_path)
-            elif epoch_val_loss - best_loss >= 0.001:
+            elif epoch_val_loss - best_loss >= es_threshold:
                 epochs_with_no_improvement += 1
                 print(f"\n{epochs_with_no_improvement} epoch without improvement")
                 if epochs_with_no_improvement >= early_stop:
@@ -148,8 +156,11 @@ def eval_function_single_sk(model,dl_eval,gender = None):
 
 
         with torch.no_grad():
-            outputs = model(input_ids = batch['input_ids'],attention_mask = batch['attention_mask'],dep_tags = batch['dep_tags'])
-        
+            if 'attention_mask' not in batch:
+                 outputs = model(input_ids = batch['input_ids'],dep_tags = batch['dep_tags'])              
+            else:
+                outputs = model(input_ids = batch['input_ids'],attention_mask = batch['attention_mask'],dep_tags = batch['dep_tags'])
+
         if gender:
             mask = batch['label'] == generic.gender[gender]
         else:
@@ -170,6 +181,46 @@ def eval_function_single_sk(model,dl_eval,gender = None):
     acc = accuracy_score(total_labels.cpu(), total_predictions.cpu())
 
     return acc
+
+def eval_other_metrics(model,dl_eval,metrics=['recall'],average='macro'):
+    metrics_score = {'recall':recall_score,'precision':precision_score,'f1':f1_score}
+    model.eval()
+
+    total_predictions = torch.tensor([]).to(device)
+    total_labels = torch.tensor([]).to(device)
+
+
+    for batch in dl_eval:
+        batch = {k:v.to(device) for k,v in batch.items()}
+
+
+
+        with torch.no_grad():
+            if 'attention_mask' not in batch:
+                 outputs = model(input_ids = batch['input_ids'],dep_tags = batch['dep_tags'])              
+            else:
+                outputs = model(input_ids = batch['input_ids'],attention_mask = batch['attention_mask'],dep_tags = batch['dep_tags'])
+
+
+        mask = batch['label'] != 2
+
+        if len(batch['label'][mask]) == 0: # Caso de que no tengamos esa tarea en la lista
+            continue       
+
+        predictions =  nn.Sigmoid()(outputs).round().squeeze()[mask]
+        labels = batch['label'][mask]
+
+
+        total_predictions = torch.cat([total_predictions,predictions])
+        total_labels = torch.cat([total_labels,labels])
+        
+
+
+    metrics_result = {}
+    for metric in metrics:
+        metrics_result[metric] = metrics_score[metric](total_labels.cpu(), total_predictions.cpu(),average=average)
+
+    return metrics_result
 #######################################################################################
 
 # TRAIN FUNCTIONS MULTI
@@ -186,7 +237,10 @@ def validation_func_multi(model,dl_val):
 
         batch = {k:v.to(device) for k,v in batch.items()}
         with torch.no_grad():
-            val_output = model(input_ids = batch['input_ids'],attention_mask = batch['attention_mask'],dep_tags = batch['dep_tags'])
+            if 'attention_mask' not in batch:
+                val_output = model(input_ids = batch['input_ids'],dep_tags = batch['dep_tags']) # Calcula outputs
+            else:
+                val_output = model(input_ids = batch['input_ids'],attention_mask = batch['attention_mask'],dep_tags = batch['dep_tags'])
 
         loss = 0
         for task in val_output:
@@ -210,8 +264,10 @@ def train_one_epoch_multi(model,dl_train,optimizer,lr_scheduler,progress_bar):
         batch = {k:v.to(device) for k,v in batch.items()} # Manda los datos a la gpu
 
         optimizer.zero_grad()
-        
-        output = model(input_ids = batch['input_ids'],attention_mask = batch['attention_mask'],dep_tags = batch['dep_tags']) # Calcula outputs
+        if 'attention_mask' not in batch:
+            output = model(input_ids = batch['input_ids'],dep_tags = batch['dep_tags']) # Calcula outputs
+        else:
+            output = model(input_ids = batch['input_ids'],attention_mask = batch['attention_mask'],dep_tags = batch['dep_tags']) # Calcula outputs
 
         
         loss =0
@@ -287,7 +343,7 @@ def train_function_multi(model,num_epochs,dl_train,optimizer,early_stop = 10,dl_
                 best_loss = epoch_val_loss
                 epochs_with_no_improvement = 0
                 torch.save(model.state_dict(),save_path)
-            elif epoch_val_loss - best_loss >= 0.001:
+            elif epoch_val_loss - best_loss >= 0.0001:
                 epochs_with_no_improvement += 1
                 print(f"\n{epochs_with_no_improvement} epoch without improvement")
                 if epochs_with_no_improvement >= early_stop:
@@ -305,7 +361,7 @@ def train_function_multi(model,num_epochs,dl_train,optimizer,early_stop = 10,dl_
     generic.plot_losses_val(train_loss,val_loss)
     return 
 
-#Sigue modificando esta (he modificado, mirar si funciona antes de train)
+
 def eval_function_multi(model,dl_eval,tasks,gender = None):
 
     model.eval()
@@ -326,8 +382,11 @@ def eval_function_multi(model,dl_eval,tasks,gender = None):
 
 
             with torch.no_grad():
-                outputs = model(input_ids = batch['input_ids'],attention_mask = batch['attention_mask'],dep_tags = batch['dep_tags'])
-        
+                if 'attention_mask' not in batch:
+                    outputs = model(input_ids = batch['input_ids'],dep_tags = batch['dep_tags'])
+                else:
+                    outputs = model(input_ids = batch['input_ids'],attention_mask = batch['attention_mask'],dep_tags = batch['dep_tags'])
+
             if gender:
                 mask = batch[task] == generic.gender[gender]
             else:
@@ -351,3 +410,55 @@ def eval_function_multi(model,dl_eval,tasks,gender = None):
         acc[task] = accuracy_score(total_labels[task].cpu(), total_predictions[task].cpu())
 
     return acc
+
+
+def eval_other_metrics_multi(model,dl_eval,tasks,metrics=['recall'],average='macro'):
+    """Metrics supported: recall, precision,f1-score"""
+
+    metrics_score = {'recall':recall_score,'precision':precision_score,'f1':f1_score}
+    model.eval()
+
+    total_predictions = {}
+    total_labels = {}
+    for task in tasks:
+        total_predictions[task]=torch.tensor([]).to(device)
+        total_labels[task] = torch.tensor([]).to(device)
+
+    
+
+    for batch in dl_eval:
+        batch = {k:v.to(device) for k,v in batch.items()}
+
+
+        for task in tasks:
+
+
+            with torch.no_grad():
+                if 'attention_mask' not in batch:
+                    outputs = model(input_ids = batch['input_ids'],dep_tags = batch['dep_tags'])
+                else:
+                    outputs = model(input_ids = batch['input_ids'],attention_mask = batch['attention_mask'],dep_tags = batch['dep_tags'])
+
+
+            mask = batch[task] != 2 
+
+
+
+            if len(batch[task][mask]) == 0: # Caso de que no tengamos muestras con etiquetas conocidas
+                continue
+
+            predictions =  nn.Sigmoid()(outputs[task]).round().squeeze()[mask]
+            labels = batch[task][mask]
+
+
+            total_predictions[task] = torch.cat([total_predictions[task],predictions])
+            total_labels[task] = torch.cat([total_labels[task],labels])
+            
+
+    metrics_result = {}
+    for task in total_predictions:
+        metrics_result[task]={}
+        for metric in metrics:
+            metrics_result[task][metric] = metrics_score[metric](total_labels[task].cpu(), total_predictions[task].cpu(),average=average)
+
+    return metrics_result

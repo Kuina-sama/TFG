@@ -78,7 +78,6 @@ class DatasetMultitaskDep(Dataset):
         sample = {'input_ids': x,
                 'attention_mask': attention,
                 'dep_tags':torch.tensor(dep_tags),
-                
                 'tasks':self.tasks,
                 'num_vocabs':len(dep_tags) # Esto es porque necesito el dato para collate_fn
                 }
