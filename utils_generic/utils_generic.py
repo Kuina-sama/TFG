@@ -92,6 +92,54 @@ class Vocabulary():
                         self.vocabs[indx].add('unk')
 
 
+class Vocabulary_basic():
+    def __init__(self, data, encoding):
+        self.encoding = encoding
+        self._create_vocabulary(data, encoding)
+
+        self.word_to_indx = []
+
+        for i in self.vocabs:
+            self.word_to_indx.append(
+                {word: i for i, word in enumerate(self.vocabs[i])})
+
+    def get_vocab_sizes(self):
+        vocabs_len = []
+        for i in self.vocabs:
+            vocabs_len.append(len(self.vocabs[i]))
+
+        return vocabs_len
+
+    def total_vocabs(self):
+        return self.total_vocabs
+
+    def _create_vocabulary(self, dataset, encoding):
+
+        self.total_vocabs = 1
+        self.vocabs = {}
+        for i in range(self.total_vocabs):
+            self.vocabs[i] = set()
+
+        for item in list(dataset.values()):
+            for dep_label in item[encoding]:
+                for indx in range(self.total_vocabs):
+
+                    self.vocabs[indx].add(dep_label)
+                    self.vocabs[indx].add('unk')
+
+
+
+def split_sentence_dep_tags(dep_tags,pos_based_encoding=False):
+
+    if pos_based_encoding:
+        split_temp = [dep.replace('--', '_').split('_') for dep in dep_tags]
+    else:
+        split_temp = [dep.split('_') for dep in dep_tags]
+        
+    deps = [item for dep in split_temp for item in dep]
+
+    return deps
+    
 #######################################################################################
 
 # Funciones para formatear el dataset y tokenizar los textos
@@ -182,33 +230,7 @@ def create_w2v_vocab(train_data, w2v_model):
     return vocabulary
 
 
-# def tokenize_dataset_rrnn(dataset, tasks_names, word_to_index):
-#     """Tokeniza y formatea el dataset indicado para las tareas indicadas en tasks_names.
-
-#     NO considera la información de parsing de dependencias
-
-#     """
-
-#     token_data = {}
-#     for index, text in enumerate(dataset):
-#         tokenized = [word_to_index.get(word, word_to_index['unk'])
-#                      for word in text.split(' ')]
-
-#         labels = {}
-#         for task in tasks_names:
-#             aux_label = [text_to_num[task][x]
-#                          for x in dataset[text][f'label_{task}']]
-
-#             labels[task] = aux_label
-
-#         token_data[index] = {'text': text,
-#                              'input_ids': tokenized,
-#                              'labels': labels}
-
-#     return token_data
-
-
-def tokenize_dataset_rrnn(dataset, tasks_names, word_to_index=None, tfidf=None):
+def tokenize_dataset_rrnn(dataset, tasks_names, word_to_index=None, vect=None):
     """Tokeniza y formatea el dataset indicado para las tareas indicadas en tasks_names.
 
     NO considera la información de parsing de dependencias
@@ -216,8 +238,8 @@ def tokenize_dataset_rrnn(dataset, tasks_names, word_to_index=None, tfidf=None):
 
     token_data = {}
     for index, text in enumerate(dataset):
-        if tfidf is not None:
-            tokenized = tfidf.transform([dataset[text]['tokenized']]).toarray()
+        if vect is not None:
+            tokenized = vect.transform([dataset[text]['tokenized']]).toarray()
         else:
             tokenized = [word_to_index.get(
                 word, word_to_index['unk']) for word in text.split(' ')]
@@ -236,51 +258,16 @@ def tokenize_dataset_rrnn(dataset, tasks_names, word_to_index=None, tfidf=None):
     return token_data
 
 
-# def tokenize_dataset_with_dependencies_rrnn(dataset, tasks_names, vocab, word_to_index):
-#     """ Tokeniza y formatea mi dataset. SI considera la información de parsing de dependencias.
-#     Por el momento funciona para encoding relative"""
-
-#     token_data = {}
-#     for index, text in enumerate(dataset):
-#         tokenized = [word_to_index.get(word, word_to_index['unk'])
-#                      for word in dataset[text]['tokenized'].split(' ')]
-
-#         labels = {}
-#         for task in tasks_names:
-#             aux_label = [text_to_num[task][x]
-#                          for x in dataset[text][f'label_{task}']]
-
-#             labels[task] = aux_label
-
-#         # Esta parte procesa los tags de dependencia
-#         aux = [x.split('_') for x in dataset[text][vocab.encoding]]
-
-#         if vocab.encoding == 'pos':
-#             aux = [x.replace('--', '_').split('_')
-#                    for x in dataset[text][vocab.encoding]]
-
-#         dep_tags = {}
-#         for x in range(vocab.total_vocabs):
-#             dep_tags[f'tag{x}'] = [vocab.word_to_indx[x].get(
-#                 aux[i][x], vocab.word_to_indx[x]['unk']) for i in range(len(aux))]
-
-#         # Junto todo en un nuevo dataset
-#         token_data[index] = {'text': text,
-#                              'input_ids': tokenized,
-#                              'labels': labels,
-#                              'dep_tags': dep_tags}
-
-#     return token_data
-
-
-def tokenize_dataset_with_dependencies_rrnn(dataset, tasks_names, vocab, word_to_index=None, tfidf=None):
+def tokenize_dataset_with_dependencies_rrnn(dataset, tasks_names, vocab=None, word_to_index=None, vect=None):
     """ Tokeniza y formatea mi dataset. SI considera la información de parsing de dependencias.
     Por el momento funciona para encoding relative"""
 
     token_data = {}
     for index, text in enumerate(dataset):
-        if tfidf is not None:
-            tokenized = tfidf.transform([dataset[text]['tokenized']]).toarray()
+        if vect is not None:
+            # tokenized = vect.transform([dataset[text]['tokenized']]).toarray()
+            tokenized = vect.transform(
+                [dataset[text]['sentence_with_deps']]).toarray()
         else:
             tokenized = [word_to_index.get(
                 word, word_to_index['unk']) for word in dataset[text]['tokenized'].split(' ')]
@@ -291,24 +278,30 @@ def tokenize_dataset_with_dependencies_rrnn(dataset, tasks_names, vocab, word_to
                          for x in dataset[text][f'label_{task}']]
 
             labels[task] = aux_label
-# Por el momento los tags de dependencia los voy a procesar igual que en el resto
-        # Esta parte procesa los tags de dependencia
-        aux = [x.split('_') for x in dataset[text][vocab.encoding]]
 
-        if vocab.encoding == 'pos':
-            aux = [x.replace('--', '_').split('_')
-                   for x in dataset[text][vocab.encoding]]
+        if vocab:
+            # Esta parte procesa los tags de dependencia
+            aux = [x.split('_') for x in dataset[text][vocab.encoding]]
 
-        dep_tags = {}
-        for x in range(vocab.total_vocabs):
-            dep_tags[f'tag{x}'] = [vocab.word_to_indx[x].get(
-                aux[i][x], vocab.word_to_indx[x]['unk']) for i in range(len(aux))]
+            if vocab.encoding == 'pos':
+                aux = [x.replace('--', '_').split('_')
+                    for x in dataset[text][vocab.encoding]]
 
-        # Junto todo en un nuevo dataset
-        token_data[index] = {'text': text,
-                             'input_ids': tokenized,
-                             'labels': labels,
-                             'dep_tags': dep_tags}
+            dep_tags = {}
+            for x in range(vocab.total_vocabs):
+                dep_tags[f'tag{x}'] = [vocab.word_to_indx[x].get(
+                    aux[i][x], vocab.word_to_indx[x]['unk']) for i in range(len(aux))]
+
+            # Junto todo en un nuevo dataset
+            token_data[index] = {'text': text,
+                                'input_ids': tokenized,
+                                'labels': labels,
+                                'dep_tags': dep_tags}
+        else:
+            token_data[index] = {'text': text,
+                    'input_ids': tokenized,
+                    'labels': labels}
+
 
     return token_data
 #######################################################################################

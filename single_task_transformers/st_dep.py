@@ -1,7 +1,8 @@
+from transformers import PreTrainedModel
 from tqdm.auto import tqdm
 from utils_generic import text_to_num, task_to_num
 import matplotlib.pyplot as plt
-from datasets import load_metric
+
 from transformers import get_scheduler
 import torch
 
@@ -152,7 +153,7 @@ class SingleTaskDep(nn.Module):
 
     def __init__(self, conf, vocab, num_labels=2, dropout=0.1):
         super().__init__()
-        self.num_labels = conf['num_labels']
+
         self.name = conf['model_name']
         self.embedding_dim = conf['embedding_dim']
         self.lstm_hidden_dim = conf['lstm_hidden_dim']

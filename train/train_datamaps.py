@@ -110,7 +110,7 @@ def train_one_epoch(model, dl_train, optimizer, lr_scheduler, progress_bar):
     return epoch_loss/len(dl_train), epoch_true_label_probs, epoch_correctness
 
 
-def train_function(model, num_epochs, dl_train, optimizer, early_stop=10, dl_val=None, save_path='model', es_threshold=0):
+def train_function(model, num_epochs, dl_train, optimizer, early_stop=10, dl_val=None, save_path='model', es_threshold=0, emb_weights=False):
     '''
     model: modelo a entrenar.
     num_epoch: ciclos de entrenamiento
@@ -270,7 +270,7 @@ def train_one_epoch_multi(model, dl_train, optimizer, lr_scheduler, progress_bar
     return epoch_loss/len(dl_train), epoch_true_label_probs, epoch_correctness
 
 
-def train_function_multi(model, num_epochs, dl_train, optimizer, early_stop=10, dl_val=None, save_path='model', es_threshold=0):
+def train_function_multi(model, num_epochs, dl_train, optimizer, early_stop=10, dl_val=None, save_path='model', es_threshold=0, emb_weights=False):
 
     num_training_steps = num_epochs * len(dl_train)
 
@@ -306,9 +306,9 @@ def train_function_multi(model, num_epochs, dl_train, optimizer, early_stop=10, 
         epoch_loss, epoch_true_label_probs, epoch_correctness = train_one_epoch_multi(
             model, dl_train, optimizer, lr_scheduler, progress_bar)
 
-        epoch_train_loss = epoch_loss/len(dl_train)
-        train_loss.append(epoch_train_loss)
-
+        # epoch_train_loss = epoch_loss/len(dl_train)
+        # train_loss.append(epoch_train_loss)
+        train_loss.append(epoch_loss)
         for task in ['about', 'to', 'as']:
             probs_true_labels[task] = torch.cat(
                 [probs_true_labels[task], epoch_true_label_probs[task]], dim=1)
@@ -320,7 +320,7 @@ def train_function_multi(model, num_epochs, dl_train, optimizer, early_stop=10, 
             epoch_val_loss = validation_func_multi(model, dl_val)
             val_loss.append(epoch_val_loss)
             print(
-                f'Epoch {epoch+1} \t Training loss: {epoch_train_loss} \t Validation loss: {epoch_val_loss} \t ')
+                f'Epoch {epoch+1} \t Training loss: {epoch_loss} \t Validation loss: {epoch_val_loss} \t ')
             if epoch_val_loss < best_loss:  # El error ha mejorado
                 best_loss = epoch_val_loss
                 epochs_with_no_improvement = 0
@@ -382,10 +382,22 @@ def get_correctness_vector_from_true_labels(true_labels_probs):
     return correctness
 
 
-def get_datamaps_info(true_labels_probs, correctness_vector, num_epochs=10):
-    variability = get_variability(true_labels_probs, num_epochs)
-    confidence = get_confidence(true_labels_probs, num_epochs)
-    correctness = correctness_vector.mean(axis=1)
+random_index_15k = torch.load('map_index.pt')
+
+random_index_10k = torch.load('map_index_10k.pt')
+
+
+def get_datamaps_info(true_labels_probs, correctness_vector, num_epochs=10, show_samples=False):
+    if show_samples:
+        variability = get_variability(
+            true_labels_probs[random_index_15k], num_epochs)
+        confidence = get_confidence(
+            true_labels_probs[random_index_15k], num_epochs)
+        correctness = correctness_vector[random_index_15k].mean(axis=1)
+    else:
+        variability = get_variability(true_labels_probs, num_epochs)
+        confidence = get_confidence(true_labels_probs, num_epochs)
+        correctness = correctness_vector.mean(axis=1)
 
     boundaries = torch.tensor([0.0, 0.2, 0.3, 0.5, 0.7, 0.8, 1.0])
     correctness_discrete = torch.bucketize(correctness, boundaries)
@@ -396,11 +408,15 @@ def get_datamaps_info(true_labels_probs, correctness_vector, num_epochs=10):
     return data
 
 
-def get_datamap(true_labels_probs, correctness, num_epochs=10, plot_title='Data Map'):
+def get_datamap(true_labels_probs, correctness, num_epochs=10, plot_title='Data Map', show_samples=False):
 
-    data = get_datamaps_info(true_labels_probs, correctness, num_epochs)
+    data = get_datamaps_info(
+        true_labels_probs, correctness, num_epochs, show_samples)
+    #
+
+    #
     fig = sns.scatterplot(data=data, x='variability', y='confidence',
-                          style='correctness_plot', hue='correctness_plot')
+                          style='correctness_plot', hue='correctness_plot', palette='deep')
     fig.set(title=plot_title)
     return
 
@@ -414,9 +430,9 @@ def plot_datamaps_density(data, variable, color='blue', bins=7):
     return
 
 
-def get_datamap_complete_graph(true_labels_probs, correctness_vector, num_epochs=10):
+def get_datamap_complete_graph(true_labels_probs, correctness_vector, num_epochs=10, show_samples=False):
     map_data = get_datamaps_info(
-        true_labels_probs, correctness_vector=correctness_vector, num_epochs=num_epochs)
+        true_labels_probs, correctness_vector=correctness_vector, num_epochs=num_epochs, show_samples=show_samples)
 
     f = plt.figure()
 
@@ -424,7 +440,7 @@ def get_datamap_complete_graph(true_labels_probs, correctness_vector, num_epochs
     f.set_figwidth(20)
     f.add_subplot(3, 2, (1, 5))
     get_datamap(true_labels_probs, correctness=correctness_vector,
-                num_epochs=num_epochs)
+                num_epochs=num_epochs, show_samples=show_samples)
     f.add_subplot(3, 2, 2)
     plot_datamaps_density(map_data, 'confidence', color='lightgreen')
     f.add_subplot(3, 2, 4)

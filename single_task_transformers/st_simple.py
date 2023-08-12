@@ -64,6 +64,45 @@ class DatasetSingleTaskSimple(Dataset):
         return len(self.data)
 
 
+class DatasetSingleTaskSimple_triple(Dataset):
+    def __init__(self, data, task, eval):
+        self.data = data
+        self.task = task
+        self.eval = eval
+
+    def __getitem__(self, index):
+        if torch.is_tensor(index):
+            index = index.tolist()
+
+        x = torch.tensor(self.data[index]['input_ids'])
+
+        attention = torch.tensor(self.data[index]['attention_mask'])
+
+        raw_label = self.data[index]['labels'][self.task]
+
+        if len(raw_label) > 1:
+            label = np.random.choice(raw_label)
+            # if label == 2:
+            #     label = np.random.choice([0, 1])
+        elif len(raw_label) == 1:
+            # if raw_label[0] == 2:
+            #     label = np.random.choice([0, 1])
+            # else:
+            label = raw_label[0]
+        elif len(raw_label) == 0 and self.eval == True:
+            label = 2
+
+        sample = {'input_ids': x,
+                  'attention_mask': attention,
+                  'tasks': self.task,
+                  'label': label}
+
+        return sample
+
+    def __len__(self):
+        return len(self.data)
+
+
 def collate_fn(batch):
 
     input_ids = [b['input_ids'] for b in batch]
@@ -93,7 +132,7 @@ class SingleTaskSimple(nn.Module):
 
     def __init__(self, conf, num_labels=2, dropout=0.1):
         super().__init__()
-        self.num_labels = conf['num_labels']
+        self.num_labels = num_labels
         self.name = conf['model_name']
         self.encoder_dim = conf['encoder_dim']
         self.dropout = dropout
